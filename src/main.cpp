@@ -1,332 +1,189 @@
 #include "main.h"
-#include "pros/motors.h"
+#include <fstream>
+using namespace std;
 using namespace pros;
 
-bool intake_spinning = false;
-bool flywheel_spinning = false;
-bool intake_front = true;
-pros::Controller controller(pros::E_CONTROLLER_MASTER);
-// pros::Motor intake_motor(20);
-pros::Motor flywheel_motor(18);
-pros::Motor indexer(19);
-pros::Motor roller_intake(17, pros::E_MOTOR_GEARSET_18, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_left(1, pros::E_MOTOR_GEARSET_18, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor front_right(13, pros::E_MOTOR_GEARSET_18, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_left(15, pros::E_MOTOR_GEARSET_18, false, pros::E_MOTOR_ENCODER_DEGREES);
-pros::Motor back_right(16, pros::E_MOTOR_GEARSET_18, false, pros::E_MOTOR_ENCODER_DEGREES);
+Controller controls(E_CONTROLLER_MASTER);
 
-// Chassis constructor
-Drive chassis(
-    // Left Chassis Ports (negative port will reverse it!)
-    //   the first port is the sensored port (when trackers are not used!)
-    {1, 15}
+Motor indexer(17, E_MOTOR_GEARSET_18, false, E_MOTOR_ENCODER_DEGREES);
+Motor intake_roller(9);
 
-    // Right Chassis Ports (negative port will reverse it!)
-    //   the first port is the sensored port (when trackers are not used!)
-    ,{-10, -16}
+Motor flywheel1(19, E_MOTOR_GEARSET_18, false, E_MOTOR_ENCODER_DEGREES);
+Motor flywheel2(20, E_MOTOR_GEARSET_18, true, E_MOTOR_ENCODER_DEGREES);
 
-    // IMU Port
-    ,4
+Motor FrontLeft(1, E_MOTOR_GEARSET_18, false, E_MOTOR_ENCODER_DEGREES);
+Motor BackLeft(2, E_MOTOR_GEARSET_18, false, E_MOTOR_ENCODER_DEGREES);
 
-    // Wheel Diameter (Remember, 4" wheels are actually 4.125!)
-    //    (or tracking wheel diameter)
-    ,4.125
+Motor FrontRight(3, E_MOTOR_GEARSET_18, true, E_MOTOR_ENCODER_DEGREES);
+Motor BackRight(4, E_MOTOR_GEARSET_18, true, E_MOTOR_ENCODER_DEGREES);
 
-    // Cartridge RPM
-    //   (or tick per rotation if using tracking wheels)
-    ,200
+void initialize()
+{
+	lcd::initialize();
+	indexer.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	lcd::set_text(1, "Screen working");
+	controls.set_text(0, 0, "Controller Working");
+	indexer.tare_position();
+	indexer.move_absolute(160, 127);
+	indexer.tare_position();
+}
+void disabled()
+{
+}
+void competition_initialize()
+{ // there is a hostage
+}
+void autonomous()
+{ // I exist help!
+}
+void opcontrol()
+{
+	// next time comment out hold, and check if it goes back to 0 when it goes backwards.
+	indexer.set_brake_mode(E_MOTOR_BRAKE_HOLD);
+	intake_roller.set_brake_mode(E_MOTOR_BRAKE_HOLD);
 
-    // External Gear Ratio (MUST BE DECIMAL)
-    //    (or gear ratio of tracking wheel)
-    // eg. if your drive is 84:36 where the 36t is powered, your RATIO would be 2.333.
-    // eg. if your drive is 36:60 where the 60t is powered, your RATIO would be 0.6.
-    ,1.4
+	int x1, y1, x2, y2;
+	int start_time = int(millis());
+	int time_passed = int(millis()) - start_time;
+	int intake_timer = int(millis()), indexer_timer = int(millis());
+	int left_speeds = 0, right_speeds = 0;
+	bool intake_on = false;
 
-    // Uncomment if using tracking wheels
-    /*
-    // Left Tracking Wheel Ports (negative port will reverse it!)
-    // ,{1, 2} // 3 wire encoder
-    // ,8 // Rotation sensor
+	ofstream movement_file;
+	movement_file.open("/usd/movements.txt", ios::out);
+	lcd::set_text(2, "Hello world");
+	delay(400);
 
-    // Right Tracking Wheel Ports (negative port will reverse it!)
-    // ,{-3, -4} // 3 wire encoder
-    // ,-9 // Rotation sensor
-    */
+	if (!movement_file.is_open())
+	{
+		lcd::set_text(3, "File didnt open");
+	}
+	else
+	{
+		lcd::set_text(3, "EPIC is open!!");
+	}
 
-    // Uncomment if tracking wheels are plugged into a 3 wire expander
-    // 3 Wire Port Expander Smart Port
-    // ,1
-);
+	/*
+	FILE* usd_file_write = fopen("/usd/movement.txt", "w");
+	fputs("Example text", usd_file_write);
+	fclose(usd_file_write);
+	*/
 
-/**
- * Runs initialization code. This occurs as soon as the program is started.
- *
- * All other competition modes are blocked by initialize; it is recommended
- * to keep execution time for this mode under a few seconds.
- */
-void initialize() {
-  // Print our branding over your terminal :D
-  // ez::print_ez_template();
+	while (true)
+	{
 
-  pros::delay(500);  // Stop the user from doing anything while legacy ports configure.
+		x2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_X);
+		y2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
 
-  // Configure your chassis controls
-  chassis.toggle_modify_curve_with_controller(true);  // Enables modifying the controller curve with buttons on the joysticks
-  chassis.set_active_brake(0);                        // Sets the active brake kP. We recommend 0.1.
-  chassis.set_curve_default(0, 0);                    // Defaults for curve. If using tank, only the first parameter is used. (Comment this line out if you have an SD card!)
-  default_constants();                                // Set the drive to your own constants from autons.cpp!
+		x1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_X);
+		y1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_Y);
+		left_speeds = y2 - y1 - x1 - x2;
+		right_speeds = y2 - y1 + x1 + x2;
+		FrontLeft = left_speeds;
+		BackLeft = left_speeds;
+		FrontRight = right_speeds;
+		BackRight = right_speeds;
 
-  // These are already defaulted to these buttons, but you can change the left/right curve buttons here!
-  // chassis.set_left_curve_buttons (pros::E_CONTROLLER_DIGITAL_LEFT, pros::E_CONTROLLER_DIGITAL_RIGHT); // If using tank, only the left side is used.
-  // chassis.set_right_curve_buttons(pros::E_CONTROLLER_DIGITAL_Y,    pros::E_CONTROLLER_DIGITAL_A);
+		/*
+		if y2 positive all negtative
+		if y1 positive all positive
+		if x1 negtative, left negative, right positive
+		if x1 positive, left positive, right negative
+		if x2 negtative, left negative, right positive
+		if x2 positive, left positive, right negative
+		*/
 
-  // Autonomous Selector using LLEMU
-  ez::as::auton_selector.add_autons({
-      // Auton("Example Drive\n\nDrive forward and come back.", drive_example),
-      // Auton("Example Turn\n\nTurn 3 times.", turn_example),
-      // Auton("Drive and Turn\n\nDrive forward, turn, come back. ", drive_and_turn),
-      // Auton("Drive and Turn\n\nSlow down during drive.", wait_until_change_speed),
-      // Auton("Swing Example\n\nSwing, drive, swing.", swing_example),
-      // Auton("Combine all 3 movements", combining_movements),
-      // Auton("Interference\n\nAfter driving forward, robot performs differently if interfered or not.", interfered_example),
-      // Auton("shoot disk", shoot_disk()),
-      // Auton("roller", roller_only()),
-  });
+		movement_file << "L" << left_speeds << "R" << right_speeds;
 
-  // Initialize chassis and auton selector
-  chassis.initialize();
-  ez::as::initialize();
-  indexer.tare_position();
+		if (controls.get_digital(E_CONTROLLER_DIGITAL_R2) && indexer_timer <= int(millis()))
+		{
+			indexer.move_relative(360, 127);
+			indexer_timer = int(millis()) + 690;
+			movement_file << "PP";
+		}
+		else if (int(pros::c::motor_get_position(17)) % 360 != 0 && indexer_timer <= int(millis()))
+		{
+      int indexer_off = int(pros::c::motor_get_position(17)) % 360;
+      if(indexer_off >= 180) {
+        indexer.move_relative(360 - indexer_off, 127);
+      }
+      else
+      {
+        indexer.move_relative(-indexer_off, 127);
+      }
+			movement_file << "PN";
+			// why does indexer move backwards
+			// make move forwadrs pelase
+		}
+		lcd::set_text(2, to_string(int(indexer.get_position()) % 360));
+
+		if (controls.get_digital(E_CONTROLLER_DIGITAL_R1) && intake_timer <= int(millis()) && !intake_on)
+		{
+			intake_roller = -127;
+			intake_on = !intake_on;
+			intake_timer = int(millis()) + 500;
+			movement_file << "IP";
+		}
+		else if (controls.get_digital(E_CONTROLLER_DIGITAL_R1) && intake_timer <= int(millis()) && intake_on)
+		{
+			intake_roller = 0;
+			intake_on = !intake_on;
+			intake_timer = int(millis()) + 500;
+			movement_file << "IN";
+		}
+
+		if (controls.get_digital(E_CONTROLLER_DIGITAL_UP))
+		{
+			intake_roller = 69;
+			movement_file << "RP";
+		}
+		else if (controls.get_digital(E_CONTROLLER_DIGITAL_UP) && !intake_on)
+		{
+			intake_roller = 0;
+			movement_file << "RN";
+		}
+
+		if (controls.get_digital(E_CONTROLLER_DIGITAL_Y))
+		{
+			movement_file.close();
+			while (true)
+			{
+				lcd::set_text(3, "hamburger");
+			}
+			break;
+		}
+		if (controls.get_digital(E_CONTROLLER_DIGITAL_L2))
+		{
+			flywheel1 = 127;
+			flywheel2 = 127;
+			movement_file << "FP";
+		}
+		else if (controls.get_digital(E_CONTROLLER_DIGITAL_L1))
+		{
+			flywheel1 = 0;
+			flywheel2 = 0;
+			movement_file << "FS";
+		}
+		movement_file << endl;
+
+		time_passed = int(millis()) - start_time;
+		controls.set_text(0, 0, "Time passed:" + to_string(time_passed / 1000) + " Time left:" + to_string((105000 - time_passed) / 1000));
+		delay(50);
+	}
 }
 
-/**
- * Runs while the robot is in the disabled state of Field Management System or
- * the VEX Competition Switch, following either autonomous or opcontrol. When
- * the robot is enabled, this task will exit.
- */
-void disabled() {
-  // . . .
-}
+/*
+Left joystick = intake front
+Right joystick = flywheel front
+Indexer = Right bumper 2
+Intake = Right bumper 1
+Flywheel start = Left bumper 1
+Flywheel stop = Right bumper 2
+*/
 
-/**
- * Runs after initialize(), and before autonomous when connected to the Field
- * Management System or the VEX Competition Switch. This is intended for
- * competition-specific initialization routines, such as an autonomous selector
- * on the LCD.
- *
- * This task will exit when the robot is enabled and autonomous or opcontrol
- * starts.
- */
-void competition_initialize() {
-  // . . .
-}
-
-/**
- * Runs the user autonomous code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the autonomous
- * mode. Alternatively, this function may be called in initialize or opcontrol
- * for non-competition testing purposes.
- *
- * If the robot is disabled or communications is lost, the autonomous task
- * will be stopped. Re-enabling the robot will restart the task, not re-start it
- * from where it left off.
- */
-void autonomous() {
-  chassis.reset_pid_targets();                // Resets PID targets to 0
-  chassis.reset_gyro();                       // Reset gyro position to 0
-  chassis.reset_drive_sensor();               // Reset drive sensors to 0
-  chassis.set_drive_brake(MOTOR_BRAKE_HOLD);  // Set motors to hold.  This helps autonomous consistency.
-  front_left.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-  back_left.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-  front_right.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-  back_right.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-  roller_intake.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-
-  ez::as::auton_selector.call_selected_auton();  // Calls selected auton from autonomous selector.
-
-  // // shoot
-  // roller.move_velocity(100);
-  // pros::delay(250);
-  // roller.brake();
-
-  // flywheel_motor = 127;
-  // flywheel_spinning = true;
-  // pros::delay(3000);
-  // front_left = -127;
-  // back_left = -127;
-  // front_right = 127;
-  // back_right = 127;
-  // pros::delay(200);
-  // front_left.brake();
-  // front_right.brake();
-  // back_left.brake();
-  // back_right.brake();
-  // pros::delay(1000);
-  // front_left = -127;
-  // back_left = -127;
-  // front_right = -127;
-  // back_right = -127;
-  // pros::delay(500);
-  // front_left.brake();
-  // front_right.brake();
-  // back_left.brake();
-  // back_right.brake();
-  // pros::delay(500);
-  // indexer.move_relative(-100, 100);
-  // pros::delay(1000);
-  // indexer.move_absolute(0, 100);
-  // pros::delay(3000);
-  // indexer.move_relative(-100, 100);
-  // pros::delay(1000);
-  // indexer.move_absolute(0, 100);
-  // pros::delay(3000);
-
-  // roller only
-  front_left.move_relative(180, 100);
-  back_left.move_relative(180, 100);
-  front_right.move_relative(180, 100);
-  back_right.move_relative(180, 100);
-  roller_intake.move_relative(90, 100);
-}
-
-/**
- * Runs the operator control code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the operator
- * control mode.
- *
- * If no competition control is connected, this function will run immediately
- * following initialize().
- *
- * If the robot is disabled or communications is lost, the
- * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
- */
-void opcontrol() {
-  // This is preference to what you like to drive on.
-  chassis.set_drive_brake(MOTOR_BRAKE_COAST);
-  roller_intake.set_brake_mode(E_MOTOR_BRAKE_HOLD);
-  front_left.set_brake_mode(E_MOTOR_BRAKE_COAST);
-  back_left.set_brake_mode(E_MOTOR_BRAKE_COAST);
-  front_right.set_brake_mode(E_MOTOR_BRAKE_COAST);
-  back_right.set_brake_mode(E_MOTOR_BRAKE_COAST);
-
-  while (true) {
-    // chassis.tank(); // Tank control
-    // chassis.arcade_standard(ez::SPLIT); // Standard split arcade
-    // chassis.arcade_standard(ez::SINGLE);  // Standard single arcade
-    // chassis.arcade_flipped(ez::SPLIT); // Flipped split arcade
-    // chassis.arcade_flipped(ez::SINGLE); // Flipped single arcade
-
-    // . . .
-    // Put more user control code here!
-    // . . .
-
-    while (true) {
-      int x, y;
-      if (intake_front) {
-        x = -(controller.get_analog(E_CONTROLLER_ANALOG_LEFT_X));
-        y = -(controller.get_analog(E_CONTROLLER_ANALOG_LEFT_Y));
-      } else {
-        x = controller.get_analog(E_CONTROLLER_ANALOG_LEFT_X);
-        y = controller.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
-      }
-
-      int maximum = max(abs(y), abs(x));
-      int total = y + x;
-      int difference = y - x;
-
-      if (y == 0 && x == 0) {
-        front_left.brake();
-        front_right.brake();
-        back_left.brake();
-        back_right.brake();
-      } else if (y >= 0) {
-        if (x >= 0) {
-          front_left = maximum;
-          back_left = maximum;
-          front_right = difference;
-          back_right = difference;
-        } else {
-          front_left = total;
-          back_left = total;
-          front_right = maximum;
-          back_right = maximum;
-        }
-      } else {
-          if (x >= 0) {
-          front_left = total;
-          back_left = total;
-          front_right = -maximum;
-          back_right = -maximum;
-        } else {
-          front_left = -maximum;
-          back_left = -maximum;
-          front_right = difference;
-          back_right = difference;
-        }
-      }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_A) && intake_spinning == false) {
-        roller_intake.move(127);
-        intake_spinning = true;
-        pros::delay(500);
-      } else if (controller.get_digital(E_CONTROLLER_DIGITAL_A) && intake_spinning) {
-        roller_intake.brake();
-        intake_spinning = false;
-        pros::delay(500);
-      }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_L1) && flywheel_spinning == false) {
-        flywheel_motor.move(127);
-            flywheel_spinning = true;
-        pros::delay(500);
-      } else if (controller.get_digital(E_CONTROLLER_DIGITAL_L1) && flywheel_spinning) {
-        flywheel_motor.brake();
-            flywheel_spinning = false;
-        pros::delay(500);
-      }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_R1)){
-        roller_intake.move(100);
-        intake_spinning = false;
-      } 
-      else if (controller.get_digital(E_CONTROLLER_DIGITAL_R2)) {
-        roller_intake.move(-100);
-        intake_spinning = false;
-      }
-      else if (!intake_spinning){
-        roller_intake.brake();
-      }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_L2)) {
-        indexer.move_relative(-100, 100);
-        pros::delay(1000);
-        indexer.move_absolute(0, 100);
-        pros::delay(500);
-        }
-      
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_B)) {
-        if (flywheel_spinning) {
-          flywheel_motor = 0;
-          flywheel_spinning = false;
-          pros::delay(1000);
-        }
-        flywheel_motor = -50;
-        } else if (flywheel_motor.get_voltage() < 0) {
-          flywheel_motor.brake();
-        }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_UP)) {
-          intake_front = false;
-        }
-
-      if (controller.get_digital(E_CONTROLLER_DIGITAL_DOWN)) {
-          intake_front = true;
-        }
-      }
-    }
-
-    pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
-  } 
+// basic idea
+//  every loop or 60 milliseconds the program records the controllers button and joystick
+//  it can record button a pressed, unpressed, unpressed, pressed
+//  then we make a new program which takes the recorded inputs and replays them
+//  thus we can get vince to shot and get roller, then replay it for auton
+// bonjour
