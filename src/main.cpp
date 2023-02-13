@@ -17,6 +17,9 @@ Motor BackLeft(2, E_MOTOR_GEARSET_18, false, E_MOTOR_ENCODER_DEGREES);
 Motor FrontRight(3, E_MOTOR_GEARSET_18, true, E_MOTOR_ENCODER_DEGREES);
 Motor BackRight(4, E_MOTOR_GEARSET_18, true, E_MOTOR_ENCODER_DEGREES);
 
+Motor_Group LeftMotors({1, 2});
+Motor_Group RightMotors({3, 4});
+
 void initialize()
 {
 	lcd::initialize();
@@ -35,6 +38,7 @@ void competition_initialize()
 }
 void autonomous()
 { // I exist help!
+  
 }
 void opcontrol()
 {
@@ -72,17 +76,15 @@ void opcontrol()
 	while (true)
 	{
 
-		x2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_X);
-		y2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
+		// x2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_X);
+		// y2 = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
 
-		x1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_X);
-		y1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_Y);
-		left_speeds = y2 - y1 - x1 - x2;
-		right_speeds = y2 - y1 + x1 + x2;
-		FrontLeft = left_speeds;
-		BackLeft = left_speeds;
-		FrontRight = right_speeds;
-		BackRight = right_speeds;
+		// x1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_X);
+		// y1 = controls.get_analog(E_CONTROLLER_ANALOG_RIGHT_Y);
+		// left_speeds = y2 - y1 - x1 - x2;
+		// right_speeds = y2 - y1 + x1 + x2;
+    	// LeftMotors.move(left_speeds);
+    	// RightMotors.move(right_speeds);
 
 		/*
 		if y2 positive all negtative
@@ -93,7 +95,31 @@ void opcontrol()
 		if x2 positive, left positive, right negative
 		*/
 
-		movement_file << "L" << left_speeds << "R" << right_speeds;
+		int x = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_X);
+		int y = controls.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
+
+		if (y == 0 && x == 0){
+			LeftMotors.brake();
+			RightMotors.brake();
+		}
+		else if (y != 0 && x == 0) {
+			LeftMotors.move(y);
+			RightMotors.move(y);
+		}
+		else if (y == 0 && x != 0) {
+			LeftMotors.move(x);
+			RightMotors.move(-x);
+		}
+		else if (y > 0 && x != 0) {
+			LeftMotors.move(y + x);
+			RightMotors.move(y - x);
+		}
+		else if (y < 0 && x != 0) {
+			LeftMotors.move(y - x);
+			RightMotors.move(y + x);
+		}
+
+		// movement_file << "L" << left_speeds << "R" << right_speeds;
 
 		if (controls.get_digital(E_CONTROLLER_DIGITAL_R2) && indexer_timer <= int(millis()))
 		{
@@ -112,8 +138,6 @@ void opcontrol()
         indexer.move_relative(-indexer_off, 127);
       }
 			movement_file << "PN";
-			// why does indexer move backwards
-			// make move forwadrs pelase
 		}
 		lcd::set_text(2, to_string(int(indexer.get_position()) % 360));
 
@@ -167,14 +191,13 @@ void opcontrol()
 		movement_file << endl;
 
 		time_passed = int(millis()) - start_time;
-		controls.set_text(0, 0, "Time passed:" + to_string(time_passed / 1000) + " Time left:" + to_string((105000 - time_passed) / 1000));
 		delay(50);
 	}
 }
 
 /*
-Left joystick = intake front
-Right joystick = flywheel front
+Left joystick = flywheel front
+Right joystick = intake front
 Indexer = Right bumper 2
 Intake = Right bumper 1
 Flywheel start = Left bumper 1
